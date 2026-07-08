@@ -1,0 +1,23 @@
+[paths]
+zotero_storage_path = "~/Zotero/storage"
+obsidian_vault_path = "~/Obsidian/Offline AI Workflow"
+literature_note_folder = "Literature"
+template_path = "obsidian/templates/base-note.md"
+manifest_path = "~/Obsidian/Offline AI Workflow/.mcp/embedding_manifest.jsonl"
+
+[text_extractor]
+provider = "local-command"
+command = ["pdftotext", "-layout", "{pdf}", "-"]
+max_chars = 120000
+
+[summarizer]
+provider = "local-command"
+command = []
+max_input_chars = 24000
+
+[embeddings]
+provider = "local-command"
+command = []
+index_name = "obsidian-literature"
+chunk_strategy = "section"
+

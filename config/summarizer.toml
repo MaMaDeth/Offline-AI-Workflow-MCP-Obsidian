@@ -13,11 +13,12 @@ max_chars = 120000
 [summarizer]
 provider = "ollama-api"
 command = []
-model = "llama3:8b-instruct-q4_0"
+model = "qwen3.5:4b-mlx"
 endpoint = "http://127.0.0.1:11434/api/generate"
+think = false
 max_input_chars = 2200
-max_output_tokens = 520
-timeout_seconds = 240
+max_output_tokens = 700
+timeout_seconds = 300
 
 [embeddings]
 provider = "local-command"

@@ -30,6 +30,7 @@ class SummarizerConfig:
     command: list[str]
     model: str
     endpoint: str
+    think: bool
     max_input_chars: int
     max_output_tokens: int
     timeout_seconds: int
@@ -96,6 +97,7 @@ def load_config(config_path: Path) -> WorkflowConfig:
             command=list(summarizer["command"]),
             model=summarizer.get("model", ""),
             endpoint=summarizer.get("endpoint", "http://127.0.0.1:11434/api/generate"),
+            think=bool(summarizer.get("think", False)),
             max_input_chars=int(summarizer["max_input_chars"]),
             max_output_tokens=int(summarizer.get("max_output_tokens", 400)),
             timeout_seconds=int(summarizer.get("timeout_seconds", 180)),
@@ -170,6 +172,7 @@ def summarize_with_ollama_api(
         "model": config.model,
         "prompt": prompt,
         "stream": False,
+        "think": config.think,
         "options": {
             "temperature": 0.2,
             "num_predict": config.max_output_tokens,

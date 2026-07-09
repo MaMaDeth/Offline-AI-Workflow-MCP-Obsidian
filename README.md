@@ -56,13 +56,18 @@ can later replace each boundary with a real MCP server or local command.
    - `obsidian_vault_path`
    - `literature_note_folder`
    - local summarizer and extractor commands
-2. Preview note generation:
+2. Install or start Ollama and pull the default MLX model:
+
+   ```bash
+   ollama pull qwen3.5:4b-mlx
+   ```
+3. Preview note generation:
 
    ```bash
    python3 scripts/ingest_zotero_pdfs.py --config config/summarizer.toml --dry-run
    ```
 
-3. Generate notes:
+4. Generate notes:
 
    ```bash
    python3 scripts/ingest_zotero_pdfs.py --config config/summarizer.toml
@@ -79,12 +84,16 @@ Ollama API example:
 [summarizer]
 provider = "ollama-api"
 command = []
-model = "llama3:8b-instruct-q4_0"
+model = "qwen3.5:4b-mlx"
 endpoint = "http://127.0.0.1:11434/api/generate"
+think = false
 max_input_chars = 2200
-max_output_tokens = 520
-timeout_seconds = 240
+max_output_tokens = 700
+timeout_seconds = 300
 ```
+
+The default model uses an Ollama MLX tag for Apple Silicon. `think = false`
+keeps reasoning-only output from consuming the summary budget.
 
 Command example:
 
@@ -127,6 +136,7 @@ place.
 ## Privacy Posture
 
 - Default assumptions are offline and local.
-- No network calls are made by the Python scaffold.
+- The Ollama API path calls only the configured local endpoint.
+- No hosted model calls are made by the Python scaffold.
 - External operations are explicit commands in `config/summarizer.toml`.
 - The script can run in `--dry-run` mode before writing into your vault.

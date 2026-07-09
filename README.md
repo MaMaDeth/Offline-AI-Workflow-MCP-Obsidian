@@ -70,15 +70,28 @@ can later replace each boundary with a real MCP server or local command.
 
 ## Local Summarizer Contract
 
-The script expects a summarizer command that can read a prompt from standard
-input and write Markdown to standard output.
+The script can call Ollama through its local API, or it can run a command that
+reads a prompt from standard input and writes Markdown to standard output.
 
-Example shape:
+Ollama API example:
+
+```toml
+[summarizer]
+provider = "ollama-api"
+command = []
+model = "llama3:8b-instruct-q4_0"
+endpoint = "http://127.0.0.1:11434/api/generate"
+max_input_chars = 2200
+max_output_tokens = 520
+timeout_seconds = 240
+```
+
+Command example:
 
 ```toml
 [summarizer]
 provider = "local-command"
-command = ["ollama", "run", "llama3.1:8b"]
+command = ["llm", "-m", "local-model"]
 max_input_chars = 24000
 ```
 
@@ -117,4 +130,3 @@ place.
 - No network calls are made by the Python scaffold.
 - External operations are explicit commands in `config/summarizer.toml`.
 - The script can run in `--dry-run` mode before writing into your vault.
-

@@ -9,6 +9,8 @@ import re
 import subprocess
 import sys
 import tomllib
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,8 +26,13 @@ class TextExtractorConfig:
 
 @dataclass(frozen=True)
 class SummarizerConfig:
+    provider: str
     command: list[str]
+    model: str
+    endpoint: str
     max_input_chars: int
+    max_output_tokens: int
+    timeout_seconds: int
 
 
 @dataclass(frozen=True)
@@ -85,8 +92,13 @@ def load_config(config_path: Path) -> WorkflowConfig:
             max_chars=int(extractor["max_chars"]),
         ),
         summarizer=SummarizerConfig(
+            provider=summarizer["provider"],
             command=list(summarizer["command"]),
+            model=summarizer.get("model", ""),
+            endpoint=summarizer.get("endpoint", "http://127.0.0.1:11434/api/generate"),
             max_input_chars=int(summarizer["max_input_chars"]),
+            max_output_tokens=int(summarizer.get("max_output_tokens", 400)),
+            timeout_seconds=int(summarizer.get("timeout_seconds", 180)),
         ),
     )
 
@@ -126,6 +138,9 @@ def extract_text(pdf_path: Path, config: TextExtractorConfig) -> str:
 def summarize_pdf(pdf_path: Path, source_text: str, config: SummarizerConfig) -> str:
     prompt = build_summary_prompt(pdf_path, source_text[: config.max_input_chars])
 
+    if config.provider == "ollama-api":
+        return summarize_with_ollama_api(pdf_path, prompt, config)
+
     if not config.command:
         return fallback_summary(pdf_path)
 
@@ -141,22 +156,71 @@ def summarize_pdf(pdf_path: Path, source_text: str, config: SummarizerConfig) ->
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         return fallback_summary(pdf_path, error)
 
-    summary = result.stdout.strip()
+    summary = clean_summary_markdown(result.stdout)
     return summary if summary else fallback_summary(pdf_path)
 
 
+def summarize_with_ollama_api(
+    pdf_path: Path, prompt: str, config: SummarizerConfig
+) -> str:
+    if not config.model:
+        return fallback_summary(pdf_path, ValueError("Missing Ollama model name."))
+
+    payload = {
+        "model": config.model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0.2,
+            "num_predict": config.max_output_tokens,
+        },
+    }
+    request = urllib.request.Request(
+        config.endpoint,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=config.timeout_seconds) as response:
+            response_payload = json.loads(response.read().decode("utf-8"))
+    except (
+        OSError,
+        TimeoutError,
+        urllib.error.URLError,
+        json.JSONDecodeError,
+    ) as error:
+        return fallback_summary(pdf_path, error)
+
+    summary = clean_summary_markdown(str(response_payload.get("response", "")))
+    return summary if summary else fallback_summary(pdf_path)
+
+
+def clean_summary_markdown(summary: str) -> str:
+    clean_summary = summary.strip()
+    preface_pattern = r"(?i)^here is .*?(?:markdown|note).*?:\s*"
+    clean_summary = re.sub(preface_pattern, "", clean_summary, count=1)
+    clean_summary = re.sub(r"(?m)^[•*]\s+", "- ", clean_summary)
+    return clean_summary.strip()
+
+
 def build_summary_prompt(pdf_path: Path, source_text: str) -> str:
-    return f"""Create an Obsidian literature note for this Zotero PDF.
+    return f"""Create a concise Obsidian literature note for this Zotero PDF.
 
 Source PDF: {pdf_path.name}
 
-Return Markdown with these headings:
-- Core Summary
-- Key Claims
-- Methods And Evidence
-- Quotable Passages
-- Limitations
-- Follow Up Questions
+Return Markdown only. Keep the whole answer under 180 words.
+Use exactly these level-2 headings:
+## Core Summary
+## Key Claims
+## Methods And Evidence
+## Limitations
+## Follow Up Questions
+
+Use one short paragraph for the summary and one "-" bullet for each other section.
+Do not invent quotations. If direct quotations are unavailable, omit them.
+Do not output code, variable names, IDs, or implementation examples.
 
 Source text:
 {source_text}
@@ -237,8 +301,38 @@ def append_manifest_entry(manifest_path: Path, note_path: Path, pdf_path: Path) 
         "status": "pending",
         "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
-    with manifest_path.open("a", encoding="utf-8") as manifest_file:
-        manifest_file.write(json.dumps(entry, sort_keys=True) + "\n")
+    existing_entries = read_manifest_entries(manifest_path)
+    filtered_entries = [
+        existing_entry
+        for existing_entry in existing_entries
+        if not same_manifest_target(existing_entry, entry)
+    ]
+    filtered_entries.append(entry)
+
+    with manifest_path.open("w", encoding="utf-8") as manifest_file:
+        for manifest_entry in filtered_entries:
+            manifest_file.write(json.dumps(manifest_entry, sort_keys=True) + "\n")
+
+
+def read_manifest_entries(manifest_path: Path) -> list[dict[str, Any]]:
+    if not manifest_path.exists():
+        return []
+
+    entries: list[dict[str, Any]] = []
+    for line in manifest_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            parsed_entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed_entry, dict):
+            entries.append(parsed_entry)
+    return entries
+
+
+def same_manifest_target(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    return left.get("note_path") == right["note_path"] or left.get("pdf_path") == right["pdf_path"]
 
 
 def process_pdf(pdf_path: Path, config: WorkflowConfig, dry_run: bool) -> None:

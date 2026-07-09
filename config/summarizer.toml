@@ -11,9 +11,13 @@ command = ["pdftotext", "-layout", "{pdf}", "-"]
 max_chars = 120000
 
 [summarizer]
-provider = "local-command"
-command = ["ollama", "run", "llama3:8b-instruct-q4_0"]
-max_input_chars = 24000
+provider = "ollama-api"
+command = []
+model = "llama3:8b-instruct-q4_0"
+endpoint = "http://127.0.0.1:11434/api/generate"
+max_input_chars = 2200
+max_output_tokens = 520
+timeout_seconds = 240
 
 [embeddings]
 provider = "local-command"

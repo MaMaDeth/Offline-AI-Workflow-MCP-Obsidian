@@ -12,7 +12,7 @@ max_chars = 120000
 
 [summarizer]
 provider = "local-command"
-command = []
+command = ["ollama", "run", "llama3:8b-instruct-q4_0"]
 max_input_chars = 24000
 
 [embeddings]
@@ -20,4 +20,3 @@ provider = "local-command"
 command = []
 index_name = "obsidian-literature"
 chunk_strategy = "section"
-
